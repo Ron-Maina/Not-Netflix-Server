@@ -1,0 +1,6 @@
+# Ignore all db files
+/instance/not_netflix.db
+
+# Environment 
+/env
+/.flaskenv
