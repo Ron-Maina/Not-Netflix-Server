@@ -1,6 +1,10 @@
 from .extensions import db
-from sqlalchemy_serializer import SerializerMixin
+from flask_bcrypt import Bcrypt
 
+from sqlalchemy_serializer import SerializerMixin
+from sqlalchemy.ext.hybrid import hybrid_property
+
+bcrypt = Bcrypt()
 
 class Users(db.Model, SerializerMixin):
     __tablename__ = 'users'
@@ -14,6 +18,21 @@ class Users(db.Model, SerializerMixin):
     _password_hash = db.Column(db.String, nullable = False)
 
     my_watchlist = db.relationship("Watchlist", backref = 'user')
+
+    @hybrid_property
+    def password_hash(self):
+        return 'Unauthorized'
+    
+    @password_hash.setter
+    def password_hash(self, password):
+        password_hash = bcrypt.generate_password_hash(
+            password.encode('utf-8')
+        )
+        self._password_hash = password_hash.decode('utf-8')
+
+    def authenticate(self, password):
+        return bcrypt.check_password_hash(
+            self._password_hash, password.encode('utf-8'))
 
 
 class Watchlist(db.Model, SerializerMixin):
