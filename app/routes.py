@@ -1,7 +1,7 @@
 from flask_restx import Resource, Namespace
 from flask_jwt_extended import (create_access_token, 
                                 create_refresh_token, jwt_required, 
-                                get_jwt_identity, set_refresh_cookies)
+                                get_jwt_identity)
 from flask import make_response, jsonify, request
 from werkzeug.exceptions import BadRequest
 
@@ -49,7 +49,6 @@ class RegisterUser(Resource):
                 return jsonify({'message': 'Email already exists'}, 403)
             
             if subject:
-                print(subject)
                 new_user = Users(
                     username = data.get('given_name'),
                     email = data.get('email'),
@@ -78,19 +77,21 @@ class Login(Resource):
     def post(self):
         try:
             data = request.get_json()
-             
             subject = data.get('sub')
-            user = Users.query.filter_by(username=data.get('username')).first()
+
+            user = Users.query.filter((Users.username == data.get('username')) | (Users.email == data.get('email'))).first()
             password = data.get('password')
 
             if subject:
-                access_token = create_access_token(identity=data.get('name'))
-                refresh_token = create_refresh_token(identity=data.get('name'))
+                access_token = create_access_token(identity=data.get('email'))
+                refresh_token = create_refresh_token(identity=data.get('email'))
 
                 response = make_response(jsonify(
                     {
                         "username": data.get('name'),
-                        "access_token": access_token,    
+                        "access_token": access_token, 
+                        "refresh_token": refresh_token, 
+                        "id": user.id,  
                     },
                     201
                 ))
@@ -99,20 +100,18 @@ class Login(Resource):
                 return response
                
             elif (user) and (user.authenticate(password) == True):
-                    access_token = create_access_token(identity=user.username)
-                    refresh_token = create_refresh_token(identity=user.username)
+                    access_token = create_access_token(identity=user.email)
+                    refresh_token = create_refresh_token(identity=user.email)
 
                     response = make_response(jsonify(
                         {
                             "username": user.username,
-                            "access_token": access_token,    
+                            "access_token": access_token,
+                            "refresh_token": refresh_token,  
+                            "id": user.id,  
                         },
                         201
                     ))
-                    response.set_cookie("refresh_token", refresh_token, httponly=True, secure=True)
-                    # set_refresh_cookies({'login': True}, refresh_token, httponly=True, secure=True)
-
-
                     return response
             
             return jsonify ({"error": "Invalid Username or Password"}), 400
@@ -122,7 +121,6 @@ class Login(Resource):
         
 @ns.route('/refresh')
 class RefreshSession(Resource):
-    @ns.header("Authorization", "refresh_token", required=True)
     @jwt_required(refresh=True)
     def get(self):
         current_user = get_jwt_identity()
@@ -132,6 +130,79 @@ class RefreshSession(Resource):
             jsonify({"new_access_token": new_access_token}),
             200
         )
+
+@ns.route('/watchlist')
+class AddToWatchlist(Resource):
+    @jwt_required()
+    def post(self):
+        data = request.get_json()
+        
+        current_user = get_jwt_identity()
+
+        user = Users.query.filter_by(email=current_user).first()
+
+        existing_in_watchlist = db.session.query(Watchlist).filter(Watchlist.movie_id == data.get('id'), 
+                                                                   Watchlist.user_id == user.id).first()
+        
+        if existing_in_watchlist:
+            return jsonify({'Msg': "Already in watchlist"}), 401
+        
+        else:
+            if user:
+                new_movie = Watchlist(
+                    poster = data.get('poster_path'),
+                    title = data.get('name'),
+                    movie_id = data.get('id'),
+                    overview = data.get('overview'),
+                    user_id = user.id
+                )
+                db.session.add(new_movie)
+                db.session.commit()
+
+                response = make_response(
+                    jsonify(
+                        {
+                            "poster": new_movie.poster,
+                            "title": new_movie.title,  
+                            "overview": new_movie.overview,
+                            "id": new_movie.id    
+                        },
+                        201
+                    )
+                )
+
+                return response
+            
+@ns.route('/delete/<int:movie_id>/<int:user_id>')
+class DeleteFromWatchlist(Resource):
+    @jwt_required()
+    def delete(self, movie_id, user_id):
+        in_watchlist = db.session.query(Watchlist).filter(Watchlist.movie_id == movie_id, 
+                                Watchlist.user_id == user_id).first()
+        
+        if in_watchlist:
+            db.session.delete(in_watchlist)
+            db.session.commit()
+
+            response_body = {
+            "delete_successful": True,
+            "message": "Review deleted."    
+            }
+
+            response = make_response(
+                jsonify(response_body),
+                200
+            )
+
+            return response
+
+
+            
+  
+
+
+
+
 
        
 
