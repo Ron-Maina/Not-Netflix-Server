@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 
 from flask_migrate import Migrate
@@ -13,7 +14,7 @@ def create_app():
     app = Flask(__name__)
 
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///not_netflix.db'
-    app.config["JWT_SECRET_KEY"] = "91a199475acfdabb2ba1e513e0b07e38" 
+    app.config["JWT_SECRET_KEY"] = os.environ.get('FLASK_JWT_SECRET_KEY') 
     app.config["JWT_ALGORITHM"] = "HS256"
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=15)  
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=1)  
